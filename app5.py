@@ -181,5 +181,5 @@ elif page == "ESG与财务表现相关性分析":
     # 苏州行业对比
     st.divider()
     st.subheader("🏭 苏州各支柱行业ESG与财务表现对比")
-    fig = px.scatter(
+    fig = px.scatter()
         industry_df, x='平均ESG', y='平均收益率', size='波动率'
