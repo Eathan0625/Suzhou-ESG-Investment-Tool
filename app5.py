@@ -321,3 +321,199 @@ with tab3:
         | BB | 较差 |
         | B | 差 |
         """)   
+# --------------------------
+# 选项卡4：相关性分析
+# --------------------------
+with tab4:
+    st.header("📊 ESG与财务指标相关性分析")
+    st.write("探究苏州本地企业ESG评分与收益率、波动率等财务指标之间的量化关系")
+    st.markdown("---")
+
+    # 计算相关系数矩阵
+    corr_df = SUZHOU_COMPANIES[["综合ESG评分", "环境(E)", "社会(S)", "治理(G)", "年化收益率(%)", "年化波动率(%)"]].corr()
+
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        st.subheader("🔗 相关系数热力图")
+        # 绘制热力图，使用统一的绿色系配色
+        fig_corr = px.imshow(
+            corr_df,
+            text_auto=".2f",
+            color_continuous_scale="Greens",
+            zmin=-1,
+            zmax=1,
+            title="ESG与财务指标相关系数矩阵"
+        )
+        fig_corr.update_layout(height=500)
+        st.plotly_chart(fig_corr, use_container_width=True)
+
+    with col2:
+        st.subheader("📈 核心指标散点图")
+        # 选择X轴和Y轴指标
+        x_axis = st.selectbox(
+            "选择X轴指标",
+            ["综合ESG评分", "环境(E)", "社会(S)", "治理(G)"],
+            index=0
+        )
+        y_axis = st.selectbox(
+            "选择Y轴指标",
+            ["年化收益率(%)", "年化波动率(%)", "最新股价(元)"],
+            index=0
+        )
+
+        # 绘制散点图
+        fig_scatter = px.scatter(
+            SUZHOU_COMPANIES,
+            x=x_axis,
+            y=y_axis,
+            text="公司名称",
+            size="综合ESG评分",
+            color="综合ESG评分",
+            color_continuous_scale="Greens",
+            title=f"{x_axis} 与 {y_axis} 的关系",
+            hover_data={"股票代码": True, "行业": True}
+        )
+        fig_scatter.update_traces(textposition="top center")
+        fig_scatter.update_layout(height=500)
+        st.plotly_chart(fig_scatter, use_container_width=True)
+
+    # 分析结论
+    st.markdown("---")
+    st.subheader("💡 分析结论")
+    
+    esg_return_corr = corr_df.loc["综合ESG评分", "年化收益率(%)"]
+    esg_vol_corr = corr_df.loc["综合ESG评分", "年化波动率(%)"]
+
+    st.info(f"""
+    基于当前5家苏州上市公司的数据，我们得出以下初步结论：
+    1. **ESG评分与年化收益率呈{"正" if esg_return_corr > 0 else "负"}相关**，相关系数为 {esg_return_corr:.2f}
+    2. **ESG评分与年化波动率呈{"正" if esg_vol_corr > 0 else "负"}相关**，相关系数为 {esg_vol_corr:.2f}
+    3. 这表明在苏州本地市场，ESG表现更好的企业，往往能获得{"更高" if esg_return_corr > 0 else "更低"}的投资回报，同时风险{"更低" if esg_vol_corr < 0 else "更高"}
+    """)
+    # --------------------------
+# 选项卡5：智能投资组合
+# --------------------------
+with tab5:
+    st.header("💹 ESG约束下的智能投资组合优化")
+    st.write("基于马科维茨均值-方差模型，支持自定义最低ESG评分约束，生成最优风险收益投资组合")
+    st.markdown("---")
+
+    # 准备优化所需数据
+    returns = SUZHOU_COMPANIES["年化收益率(%)"].values
+    volatilities = SUZHOU_COMPANIES["年化波动率(%)"].values
+    esg_scores = SUZHOU_COMPANIES["综合ESG评分"].values
+    # 简化协方差矩阵（假设无相关性，适合演示）
+    cov_matrix = np.diag(volatilities ** 2)
+
+    # 用户输入参数
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        target_return = st.slider(
+            "目标年化收益率 (%)",
+            min_value=float(returns.min()),
+            max_value=float(returns.max()),
+            value=float(returns.mean()),
+            step=0.1
+        )
+    with col2:
+        min_esg_score = st.slider(
+            "投资组合最低ESG评分",
+            min_value=float(esg_scores.min()),
+            max_value=float(esg_scores.max()),
+            value=float(esg_scores.mean()),
+            step=0.1
+        )
+    with col3:
+        risk_free_rate = st.number_input(
+            "无风险收益率 (%)",
+            min_value=0.0,
+            max_value=10.0,
+            value=2.0,
+            step=0.1
+        )
+
+    # 计算两个组合进行对比
+    with st.spinner("正在计算最优投资组合..."):
+        # 1. 传统马科维茨组合（无ESG约束）
+        weights_traditional = optimize_portfolio(returns, cov_matrix, target_return=target_return)
+        # 2. ESG约束组合（核心创新点）
+        weights_esg = optimize_portfolio(returns, cov_matrix, target_return=target_return, min_esg_score=min_esg_score, esg_scores=esg_scores)
+
+    # 计算组合指标
+    def calculate_portfolio_metrics(weights, returns, cov_matrix, esg_scores, risk_free_rate):
+        port_return = np.dot(weights, returns)
+        port_vol = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+        port_esg = np.dot(weights, esg_scores)
+        sharpe_ratio = (port_return - risk_free_rate) / port_vol if port_vol > 0 else 0
+        return port_return, port_vol, port_esg, sharpe_ratio
+
+    ret_trad, vol_trad, esg_trad, sharpe_trad = calculate_portfolio_metrics(weights_traditional, returns, cov_matrix, esg_scores, risk_free_rate)
+    ret_esg, vol_esg, esg_esg, sharpe_esg = calculate_portfolio_metrics(weights_esg, returns, cov_matrix, esg_scores, risk_free_rate)
+
+    # 展示对比结果
+    st.subheader("📊 组合对比结果")
+    col_res1, col_res2 = st.columns(2)
+
+    with col_res1:
+        st.markdown("### 传统投资组合（无ESG约束）")
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        col_m1.metric("预期收益率", f"{ret_trad:.2f}%")
+        col_m2.metric("预期波动率", f"{vol_trad:.2f}%")
+        col_m3.metric("组合ESG评分", f"{esg_trad:.2f}")
+        col_m4.metric("夏普比率", f"{sharpe_trad:.2f}")
+
+        # 权重饼图
+        df_trad = pd.DataFrame({
+            "公司名称": SUZHOU_COMPANIES["公司名称"],
+            "权重(%)": weights_traditional * 100
+        })
+        fig_trad = px.pie(
+            df_trad[df_trad["权重(%)"] > 0.1],
+            values="权重(%)",
+            names="公司名称",
+            color_discrete_sequence=px.colors.sequential.Greens,
+            title="传统组合权重分配"
+        )
+        st.plotly_chart(fig_trad, use_container_width=True)
+
+    with col_res2:
+        st.markdown("### ✅ ESG约束投资组合（推荐）")
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        col_m1.metric("预期收益率", f"{ret_esg:.2f}%")
+        col_m2.metric("预期波动率", f"{vol_esg:.2f}%")
+        col_m3.metric("组合ESG评分", f"{esg_esg:.2f}", delta=f"{esg_esg - esg_trad:.2f}")
+        col_m4.metric("夏普比率", f"{sharpe_esg:.2f}", delta=f"{sharpe_esg - sharpe_trad:.2f}")
+
+        # 权重饼图
+        df_esg = pd.DataFrame({
+            "公司名称": SUZHOU_COMPANIES["公司名称"],
+            "权重(%)": weights_esg * 100
+        })
+        fig_esg = px.pie(
+            df_esg[df_esg["权重(%)"] > 0.1],
+            values="权重(%)",
+            names="公司名称",
+            color_discrete_sequence=px.colors.sequential.Greens,
+            title="ESG组合权重分配"
+        )
+        st.plotly_chart(fig_esg, use_container_width=True)
+
+    # 生成并下载报告
+    st.markdown("---")
+    st.subheader("📄 生成分析报告")
+    
+    report_content = generate_report(
+        df_esg[df_esg["权重(%)"] > 0.1],
+        weights_esg,
+        ret_esg,
+        vol_esg,
+        sharpe_esg
+    )
+
+    st.download_button(
+        label="📥 下载投资组合分析报告",
+        data=report_content,
+        file_name=f"ESG投资组合报告_{pd.Timestamp.now().strftime('%Y%m%d')}.txt",
+        mime="text/plain"
+    )
