@@ -233,4 +233,91 @@ with tab2:
             hide_index=True,
             use_container_width=True,
         )      
-   
+# --------------------------
+# 选项卡3：ESG评分计算器
+# --------------------------
+with tab3:
+    st.header("🧮 ESG评分计算器")
+    st.write("支持手动输入企业E/S/G得分，或选择已有企业，基于全局自定义权重计算综合ESG评分与评级")
+    st.markdown("---")
+
+    # 双列布局
+    col_input, col_result = st.columns([1, 1])
+
+    with col_input:
+        st.subheader("📝 输入ESG得分")
+        
+        # 方式一：手动输入
+        with st.expander("✏️ 手动输入企业数据", expanded=True):
+            e_score = st.number_input("环境(E)得分 (0-100)", min_value=0.0, max_value=100.0, value=65.0, step=0.5)
+            s_score = st.number_input("社会(S)得分 (0-100)", min_value=0.0, max_value=100.0, value=65.0, step=0.5)
+            g_score = st.number_input("治理(G)得分 (0-100)", min_value=0.0, max_value=100.0, value=65.0, step=0.5)
+
+        # 方式二：选择已有企业
+        st.subheader("🏢 快速选择苏州本地企业")
+        selected_company = st.selectbox(
+            "选择企业",
+            ["--- 请选择 ---"] + list(SUZHOU_COMPANIES["公司名称"].unique())
+        )
+
+        # 自动填充选中企业的数据
+        if selected_company != "--- 请选择 ---":
+            company_data = SUZHOU_COMPANIES[SUZHOU_COMPANIES["公司名称"] == selected_company].iloc[0]
+            e_score = company_data["环境(E)"]
+            s_score = company_data["社会(S)"]
+            g_score = company_data["治理(G)"]
+            st.success(f"已自动填充 {selected_company} 的ESG数据")
+
+    with col_result:
+        st.subheader("📊 计算结果")
+        
+        # 调用你已经写好的核心函数，使用全局自定义权重
+        final_score, final_rating = calculate_esg_score(
+            e_score, s_score, g_score,
+            weights=(e_weight, s_weight, g_weight)
+        )
+
+        # 展示当前使用的权重
+        st.info(f"""
+        当前使用权重：
+        - 环境(E): {e_weight:.1%}
+        - 社会(S): {s_weight:.1%}
+        - 治理(G): {g_weight:.1%}
+        """)
+
+        # 大卡片展示核心结果
+        st.markdown("### 综合ESG评分")
+        st.metric(label="最终得分", value=f"{final_score:.2f}")
+        
+        st.markdown("### ESG评级")
+        # 根据评级显示不同颜色
+        rating_color = {
+            "AAA": "#1B5E20", "AA": "#2E7D32", "A": "#43A047",
+            "BBB": "#FFB300", "BB": "#FB8C00", "B": "#E53935",
+            "N/A": "#757575"
+        }
+        st.markdown(f"""
+        <div style="
+            padding: 20px;
+            border-radius: 10px;
+            background-color: {rating_color.get(final_rating, '#757575')};
+            color: white;
+            text-align: center;
+            font-size: 48px;
+            font-weight: bold;
+        ">
+            {final_rating}
+        </div>
+        """, unsafe_allow_html=True)
+
+        # 评级说明
+        st.markdown("""
+        | 评级 | 说明 |
+        |------|------|
+        | AAA | 卓越 |
+        | AA | 优秀 |
+        | A | 良好 |
+        | BBB | 一般 |
+        | BB | 较差 |
+        | B | 差 |
+        """)   
