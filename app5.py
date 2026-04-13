@@ -232,5 +232,5 @@ with tab2:
             ranked[["公司名称", "股票代码", "行业", "综合ESG评分", "环境(E)", "社会(S)", "治理(G)"]],
             hide_index=True,
             use_container_width=True,
-            column_config={}
+        )      
    
